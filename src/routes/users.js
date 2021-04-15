@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pool = require("../db/db");
-const authenticateJWT = require('../auth').authenticateJWT;
+const authenticateJWT = require('../middleware/auth').authenticateJWT;
+const Log = require('../logging');
 
 router.get('/', authenticateJWT, async (req, res) => {
     try {
@@ -21,8 +22,10 @@ router.get('/:id', authenticateJWT, async (req, res) => {
         // If the authenticated user is the same as the requested user, return all data.
         // Otherwise return only a limited amount, so that sensitive data is protected.
         if (req.params.id == authenticatedUserID) {
+            Log(`USERS: User with the username of ${authenticatedUserData.username} requested its own data.`);
             return res.send(requestedUserData);
         } else {
+            Log(`USERS: User with the username of ${authenticatedUserData.username} requested ${requestedUserData.username}'s data.`);
             return res.send({
                 "id": requestedUserData.id,
                 "first_name": requestedUserData.first_name,
@@ -31,7 +34,7 @@ router.get('/:id', authenticateJWT, async (req, res) => {
             });
         }
     } catch (error) {
-        console.log(error.message);
+        Log(`USERS: Internal server error (${error.message})`);
         res.status(500).json({ message: error.message });
     }
 })
@@ -44,6 +47,7 @@ router.post('/:id/account', authenticateJWT, async (req, res) => {
 
         if (req.params.id == authenticatedUserID) {
             if (authenticatedUserData.account_id == req.body.account_id) {
+                Log(`USERS: Unsuccessful account_id change by ${authenticatedUserData.username}, can't set account_id to the current account_id.`);
                 return res.status(400).send({ "message": "Can't set account_id to the current account_id." });
             }
             
@@ -56,15 +60,36 @@ router.post('/:id/account', authenticateJWT, async (req, res) => {
                     [req.body.account_id, authenticatedUserID])
                 ).rows[0];
                 
+                Log(`USERS: Account_id changed to ${req.body.account_id} from ${authenticatedUserData.account_id} by ${authenticatedUserData.username}.`);
                 return res.send({ "account_id": updatedUserData.account_id });
             } else {
+                Log(`USERS: Unsuccessful account_id change to ${req.body.account_id} by ${authenticatedUserData.username}, account either doesn't exist or is linked to another user.`);
                 return res.status(403).send({ "message": "Account either doesn't exist or is linked to another user." });
             }
         } else {
             return res.sendStatus(403);
         }
     } catch (error) {
-        console.log(error.message);
+        Log(`USERS: Internal server error (${error.message})`);
+        res.status(500).json({ message: error.message });
+    }
+})
+
+router.delete('/:id', authenticateJWT, async (req, res) => {
+    try {
+        const authenticatedUserData = (await pool.query("SELECT * FROM users WHERE username = $1", [req.user.username])).rows[0];
+        const authenticatedUserID = authenticatedUserData.id;
+
+        if (req.params.id == authenticatedUserID) {
+            await pool.query("DELETE FROM users WHERE id = $1", [req.params.id]);
+            Log(`USERS: User ${authenticatedUserData.username} successfully deleted its own user.`);
+            return res.sendStatus(200);
+        } else {
+            Log(`USERS: Unsuccessful user deletion of user with id of ${req.params.id} by user ${authenticatedUserData.username}, not authorized.`);
+            return res.sendStatus(403);
+        }
+    } catch (error) {
+        Log(`USERS: Internal server error (${error.message})`);
         res.status(500).json({ message: error.message });
     }
 })
