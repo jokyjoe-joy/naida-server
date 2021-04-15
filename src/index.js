@@ -3,7 +3,7 @@ const express = require('express');
 const app = express();
 const jwt = require('jsonwebtoken');
 const pool = require("./db/db");
-const bcrypt = require('bcrypt');
+const argon2 = require('argon2');
 const Log = require('./logging');
 
 // Parsers for POST data
@@ -14,9 +14,6 @@ app.use(express.urlencoded({ extended: false, limit: '20mb' }));
 const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
 const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET;
 const refreshTokens = [];
-
-// Bcrypt config
-const saltRounds = process.env.BCRYPT_SALT_ROUNDS;
 
 // Routes
 const accountRoutes = require('./routes/accounts');
@@ -61,7 +58,7 @@ app.post('/login', async (req, res) => {
 
         let user = await pool.query("SELECT * from users WHERE username = $1", [username]);
 
-        if (user.rows[0] && await bcrypt.compare(password, user.rows[0].password)) {
+        if (user.rows[0] && await argon2.verify(user.rows[0].password, password)) {
             // Need to get user info here, because .rows[0] doesn't exist if there is no user found.
             user = user.rows[0];
             Log(`LOGIN: Successful login with the username of ${username}.`);   
@@ -131,7 +128,7 @@ app.post('/register', async (req, res) => {
             return res.status(400).send({ message: "The given password doesn't meet complexity requirements." });
         }
 
-        const hashedPassword = await bcrypt.hash(password, parseInt(saltRounds));
+        const hashedPassword = await argon2.hash(password);
         const user = await pool.query(
             `INSERT INTO users(first_name, middle_name, last_name, username, password, place_of_birth, date_of_birth)
             VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *`,

@@ -3,12 +3,6 @@
 CREATE DATABASE naida;
 \c naida;
 
-CREATE TABLE accounts(
-	id SERIAL PRIMARY KEY NOT NULL,
-	amount_of_money NUMERIC(15,6),
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE users(
 	id SERIAL PRIMARY KEY NOT NULL,
 	first_name TEXT NOT NULL,
@@ -22,9 +16,21 @@ CREATE TABLE users(
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE accounts(
+	id SERIAL PRIMARY KEY NOT NULL,
+	amount_of_money NUMERIC(15,6),
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-
-
+CREATE TABLE transactions(
+	id SERIAL PRIMARY KEY NOT NULL,
+	sender_account_id INT NOT NULL,
+	receiver_account_id INT NOT NULL,
+	amount_of_money NUMERIC(15,6) NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+	finished_at TIMESTAMP WITH TIME ZONE,
+	status TEXT DEFAULT 'PENDING'
+);
 
 
 -- EXAMPLES
@@ -37,8 +43,3 @@ INSERT INTO accounts(amount_of_money) VALUES(10);
 -- Example users
 INSERT INTO users(first_name, last_name, account_id, username, password) VALUES('Jack', 'Smith', 1, 'jacksmith', 'mybadpass');
 INSERT INTO users(first_name, middle_name, last_name, account_id, username, password) VALUES('John', 'Caribbean', 'Doe', 2, 'johndoe', 'mygoodpass');
-
-/* -- Check relation between accounts and users
-SELECT accounts.id, users.first_name, users.last_name, accounts.amount_of_money
-FROM accounts
-INNER JOIN users ON accounts.id=users.id; */

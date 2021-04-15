@@ -3,6 +3,8 @@ const chai = require('chai');
 const request = require('supertest');
 const expect = chai.expect;
 
+const adminUsername = "admin";
+const adminPassword = "HardPass#12";
 const weakPassword = "thisisaweakpass";
 const registeredUserData = {
     first_name: "Testname",
@@ -10,9 +12,19 @@ const registeredUserData = {
     username: "testusername",
     password: "MyAwesome12#"
 }
+const receiverUserData = {
+    first_name: "Golden",
+    last_name: "Receiver",
+    username: "goldenrec",
+    password: "MyWowTellMe19#"
+}
 let registeredUserID;
 let registeredUserAccountID;
 let accessToken;
+let adminAccessToken;
+
+// To prevent console.log() in logging.js.
+process.env.NODE_ENV = 'test';
 
 describe('Authentication of new user', function() {
     it("should not accept weak password and return 400", function(done) {
@@ -56,7 +68,7 @@ describe('Authentication of new user', function() {
     })
 
     it('should return an access-token and refresh-token when logging in', function(done) {
-        request(app)
+       request(app)
             .post('/login')
             .send({
                 username: registeredUserData.username,
@@ -68,7 +80,7 @@ describe('Authentication of new user', function() {
                 accessToken = res.body.accessToken;
                 expect(res.body.refreshToken).to.exist;
                 done();
-            })
+            }) 
     })
     it('should return the data of the user with the access-token', function (done) {
         request(app)
@@ -85,16 +97,6 @@ describe('Authentication of new user', function() {
 })
 
 describe('Accounts testing', function () {
-    after(function(done){
-        request(app)
-            .delete(`/users/${registeredUserID}`)
-            .set('Authorization', 'Bearer ' + accessToken)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                done();
-            })
-    })
-
     it("should return the account data when creating it", function(done) {
         request(app)
             .post(`/accounts/`)
@@ -121,14 +123,64 @@ describe('Accounts testing', function () {
             })
     })
     
+})
 
-/*     it("s", function(done) {
-        request(app)
-            .post(`/${registeredUserID}/account`)
-            .set('Authorization', `Bearer ${accessToken}`)
-            .end(function(err, res) {
-                
-                done()
+if (adminUsername && adminPassword) {
+    describe('Transactions testing', function () {        
+        it("should login as admin", function(done) {
+            request(app)
+            .post('/login')
+            .send({
+                username: adminUsername,
+                password: adminPassword
             })
-    }) */
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                expect(res.body.accessToken).to.exist;
+                adminAccessToken = res.body.accessToken;
+                expect(res.body.refreshToken).to.exist;
+                done();
+            })
+        })
+    
+        it("should sender (admin) have successful transaction", function(done) {
+            request(app)
+                .post('/transactions/')
+                .set('Authorization', 'Bearer ' + adminAccessToken)
+                .send({
+                    receiver_account_id: registeredUserAccountID,
+                    amount_of_money: 2.000000,
+                    receiver_first_name: registeredUserData.first_name,
+                    receiver_last_name: registeredUserData.last_name
+                })
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.amount_of_money).to.exist;
+                    done();
+                })
+        })
+
+        it("should receiver (new user) have more money due to the previous transaction", function(done) {
+            request(app)
+                .get(`/accounts/${registeredUserAccountID}`)
+                .set('Authorization', 'Bearer ' + accessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(parseInt(res.body.amount_of_money)).to.be.closeTo(2, 0.001);
+                    done();
+                })
+        })
+    });
+}
+
+describe("Deleting new user", function() {
+    it("should delete user", function(done) {
+        request(app)
+            .delete(`/users/${registeredUserID}`)
+            .set('Authorization', 'Bearer ' + accessToken)
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                done();
+            })
+    })
 })

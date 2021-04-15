@@ -13,7 +13,9 @@ function Log(text) {
     fs.appendFile(process.env.LOG_FOLDERNAME + filename, textToWrite + '\n', function (err) {
         if (err) console.log(err.message);
     }); 
-    console.log(textToWrite);
+    
+    if (process.env.NODE_ENV !== 'test')
+        console.log(textToWrite);
 }
 
 module.exports = Log;
