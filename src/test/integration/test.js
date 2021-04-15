@@ -1,30 +1,20 @@
-var app = require('../../index');
-var chai = require('chai');
-var request = require('supertest');
+const app = require('../../index');
+const chai = require('chai');
+const request = require('supertest');
+const expect = chai.expect;
 
-var expect = chai.expect;
+const weakPassword = "thisisaweakpass";
+const registeredUserData = {
+    first_name: "Testname",
+    last_name: "Testlastname",
+    username: "testusername",
+    password: "MyAwesome12#"
+}
+let registeredUserID;
+let registeredUserAccountID;
+let accessToken;
 
 describe('Authentication of new user', function() {
-    const weakPassword = "thisisaweakpass";
-    const registeredUserData = {
-        first_name: "Testname",
-        last_name: "Testlastname",
-        username: "testusernamethatisdeletedafterwards",
-        password: "MyAwesome12#"
-    }
-    let registeredUserID;
-    let accessToken;
-
-    after(function(done){
-        request(app)
-            .delete(`/users/${registeredUserID}`)
-            .set('Authorization', 'Bearer ' + accessToken)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                done();
-            })
-    })
-
     it("should not accept weak password and return 400", function(done) {
         request(app)
             .post('/register')
@@ -92,4 +82,53 @@ describe('Authentication of new user', function() {
                 done();                
             })
     })
+})
+
+describe('Accounts testing', function () {
+    after(function(done){
+        request(app)
+            .delete(`/users/${registeredUserID}`)
+            .set('Authorization', 'Bearer ' + accessToken)
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                done();
+            })
+    })
+
+    it("should return the account data when creating it", function(done) {
+        request(app)
+            .post(`/accounts/`)
+            .set('Authorization', 'Bearer ' + accessToken)
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                expect(res.body.id).to.exist;
+                registeredUserAccountID = res.body.id;
+                expect(parseInt(res.body.amount_of_money)).to.be.closeTo(0, 0.001);
+                done();
+            })
+    })
+
+    it("should user have the same account_id as the created account", function(done) {
+        request(app)
+            .get(`/users/${registeredUserID}`)
+            .set('Authorization', 'Bearer ' + accessToken)
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
+                expect(res.body.username).to.be.equal(registeredUserData.username);
+                expect(res.body.account_id).to.be.equal(registeredUserAccountID);
+                done();
+            })
+    })
+    
+
+/*     it("s", function(done) {
+        request(app)
+            .post(`/${registeredUserID}/account`)
+            .set('Authorization', `Bearer ${accessToken}`)
+            .end(function(err, res) {
+                
+                done()
+            })
+    }) */
 })

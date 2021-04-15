@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require("../db/db");
+const Log = require("../logging");
 const authenticateJWT = require('../middleware/auth').authenticateJWT;
 
 router.get('/', authenticateJWT, async (req, res) => {
@@ -53,6 +54,34 @@ router.get('/:id/owner', authenticateJWT, async (req, res) => {
         }
 
     } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+})
+
+router.post('/', authenticateJWT, async (req, res) => {
+    try {
+        const authenticatedUserData = (await pool.query("SELECT * FROM users WHERE username = $1", [req.user.username])).rows[0];        
+        const authenticatedUserID = authenticatedUserData.id;
+        
+        // Only create a new account if user doesn't have one already. Therefore avoiding way too many accounts.
+        if (authenticatedUserData.account_id) {
+            Log(`ACCOUNTS: Unsuccessful account creation by ${authenticatedUserData.username}, user already has an account.`);
+            return res.status(400).json({ message: "User already has an account." });
+        }
+
+        const createdAccountData = (await pool.query(`INSERT INTO accounts(amount_of_money) VALUES(0) RETURNING *`)).rows[0];
+        Log(`ACCOUNTS: New account created by ${authenticatedUserData.username} with an ID of ${createdAccountData.id}.`);
+        
+        // Linking to new user after creating.
+        const updatedUserData = (await pool.query(
+            "UPDATE users SET account_id = $1 WHERE id = $2 RETURNING *", 
+            [createdAccountData.id, authenticatedUserID])
+        ).rows[0];
+
+        Log(`ACCOUNTS: The new account with the ID of ${createdAccountData.id} has been linked to ${authenticatedUserData.username}.`);
+        return res.send(createdAccountData);
+    } catch (error) {
+        Log(`ACCOUNTS: Internal server error (${error.message})`);
         return res.status(500).json({ message: error.message });
     }
 })

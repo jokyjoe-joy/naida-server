@@ -42,6 +42,10 @@ router.get('/:id', authenticateJWT, async (req, res) => {
 // Post - to change/add an account to a user.
 router.post('/:id/account', authenticateJWT, async (req, res) => {
     try {
+        // This one is probably unneccessary, as in accounts.js, upon a POST request to '/',
+        // the account is linked to the user after creation.
+        // Thus for now, this request will be removed.
+        return res.sendStatus(405);
         const authenticatedUserData = (await pool.query("SELECT * FROM users WHERE username = $1", [req.user.username])).rows[0];
         const authenticatedUserID = authenticatedUserData.id;
 

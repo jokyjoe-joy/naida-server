@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "devStart": "nodemon index.js",
-    "test": "mocha ./test/unit/authorization.js"
+    "test": "mocha ./test/integration/test.js"
   },
   "author": "",
   "license": "ISC",
