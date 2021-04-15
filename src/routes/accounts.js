@@ -86,5 +86,22 @@ router.post('/', authenticateJWT, async (req, res) => {
     }
 })
 
+router.delete('/:id', authenticateJWT, async (req, res) => {
+    try {
+        const authenticatedUserData = (await pool.query("SELECT * FROM users WHERE username = $1", [req.user.username])).rows[0];        
+
+        if (authenticatedUserData.account_id == req.params.id) {
+            await pool.query("DELETE FROM accounts WHERE id = $1", [req.params.id]);
+            Log(`ACCOUNTS: Account ${req.params.id} has been deleted by ${authenticatedUserData.username}.`);
+            return res.sendStatus(200);
+        } else {
+            Log(`ACCOUNTS: Unsuccessful account deletion of account ${req.params.id} by ${authenticatedUserData.username}.`);
+            return res.sendStatus(403);
+        }
+    } catch (error) {
+        Log(`ACCOUNTS: Internal server error (${error.message})`);
+        return res.status(500).json({ message: error.message });
+    }    
+})
 
 module.exports = router;

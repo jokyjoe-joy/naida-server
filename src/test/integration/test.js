@@ -21,6 +21,7 @@ const receiverUserData = {
 let registeredUserID;
 let registeredUserAccountID;
 let accessToken;
+let refreshToken;
 let adminAccessToken;
 
 // To prevent console.log() in logging.js.
@@ -57,7 +58,7 @@ describe('Authentication of new user', function() {
             })
     })
 
-    it("should not be able to register username with already existing username", function(done) {
+    it("should not be able to register with an already existing username", function(done) {
         request(app)
             .post('/register')
             .send(registeredUserData)
@@ -79,10 +80,11 @@ describe('Authentication of new user', function() {
                 expect(res.body.accessToken).to.exist;
                 accessToken = res.body.accessToken;
                 expect(res.body.refreshToken).to.exist;
+                refreshToken = res.body.refreshToken;
                 done();
             }) 
     })
-    it('should return the data of the user with the access-token', function (done) {
+    it('should return the full data of the user using the access-token', function (done) {
         request(app)
             .get(`/users/${registeredUserID}`)
             .set('Authorization', 'Bearer ' + accessToken)
@@ -110,7 +112,7 @@ describe('Accounts testing', function () {
             })
     })
 
-    it("should user have the same account_id as the created account", function(done) {
+    it("should created account be linked to the user who created it", function(done) {
         request(app)
             .get(`/users/${registeredUserID}`)
             .set('Authorization', 'Bearer ' + accessToken)
@@ -127,7 +129,7 @@ describe('Accounts testing', function () {
 
 if (adminUsername && adminPassword) {
     describe('Transactions testing', function () {        
-        it("should login as admin", function(done) {
+        it("should be able to login as admin", function(done) {
             request(app)
             .post('/login')
             .send({
@@ -142,8 +144,9 @@ if (adminUsername && adminPassword) {
                 done();
             })
         })
-    
-        it("should sender (admin) have successful transaction", function(done) {
+
+        it("should sender (admin) see a successful transaction", function(done) {
+            if (!adminAccessToken) this.skip();
             request(app)
                 .post('/transactions/')
                 .set('Authorization', 'Bearer ' + adminAccessToken)
@@ -161,6 +164,7 @@ if (adminUsername && adminPassword) {
         })
 
         it("should receiver (new user) have more money due to the previous transaction", function(done) {
+            if (!adminAccessToken) this.skip();
             request(app)
                 .get(`/accounts/${registeredUserAccountID}`)
                 .set('Authorization', 'Bearer ' + accessToken)
@@ -173,8 +177,75 @@ if (adminUsername && adminPassword) {
     });
 }
 
-describe("Deleting new user", function() {
-    it("should delete user", function(done) {
+describe('Logout and token refresh', function () {
+    it("should be able to logout, then have error when using the previous refresh token", function(done) {
+        request(app)
+            .post(`/logout`)
+            .send({ token: refreshToken })
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                
+                request(app)
+                .post('/token')
+                .send({ token: refreshToken })
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(403);
+                    expect(res.body.accessToken).to.not.exist;
+                    done();
+                })
+            })
+
+    })
+    it('should be able to log-in and get refresh token', function(done) {
+        request(app)
+             .post('/login')
+             .send({
+                 username: registeredUserData.username,
+                 password: registeredUserData.password
+             })
+             .end(function(err, res) {
+                 expect(res.statusCode).to.be.equal(200);
+                 expect(res.body.accessToken).to.exist;
+                 accessToken = res.body.accessToken;
+                 expect(res.body.refreshToken).to.exist;
+                 refreshToken = res.body.refreshToken;
+                 done();
+             }) 
+    })
+    it('should be able to refresh access-token and use it', function(done) {
+        request(app)
+            .post('/token')
+            .send({ token: refreshToken })
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                expect(res.body.accessToken).to.exist;
+                accessToken = res.body.accessToken;
+                
+                request(app)
+                .get(`/users/${registeredUserID}`)
+                .set('Authorization', 'Bearer ' + accessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
+                    expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
+                    expect(res.body.username).to.be.equal(registeredUserData.username);
+                    done();
+                })
+            })
+    })
+})
+
+describe("Deleting users and accounts", function() {
+    it("should delete test account", function(done) {
+        request(app)
+            .delete(`/accounts/${registeredUserAccountID}`)
+            .set('Authorization', 'Bearer ' + accessToken)
+            .end(function(err, res) {
+                expect(res.statusCode).to.be.equal(200);
+                done();
+            })
+    })
+    it("should delete test user", function(done) {
         request(app)
             .delete(`/users/${registeredUserID}`)
             .set('Authorization', 'Bearer ' + accessToken)

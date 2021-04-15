@@ -22,10 +22,10 @@ router.get('/:id', authenticateJWT, async (req, res) => {
         // If the authenticated user is the same as the requested user, return all data.
         // Otherwise return only a limited amount, so that sensitive data is protected.
         if (req.params.id == authenticatedUserID) {
-            Log(`USERS: User with the username of ${authenticatedUserData.username} requested its own data.`);
+            Log(`USERS: User ${authenticatedUserData.username} requested its own data.`);
             return res.send(requestedUserData);
         } else {
-            Log(`USERS: User with the username of ${authenticatedUserData.username} requested ${requestedUserData.username}'s data.`);
+            Log(`USERS: User ${authenticatedUserData.username} requested ${requestedUserData.username}'s data.`);
             return res.send({
                 "id": requestedUserData.id,
                 "first_name": requestedUserData.first_name,
