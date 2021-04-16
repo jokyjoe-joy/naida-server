@@ -17,8 +17,8 @@ app.use('/transactions', transactionRoutes);
 const authenticationRoutes = require('./routes/authentication')
 app.use('/', authenticationRoutes);
 
-app.listen(3000, () => {
-    Log("STARTUP: Service started on port 3000.");
+app.listen(process.env.PORT || 5000, () => {
+    Log("STARTUP: Service started on port 5000.");
 });
 
 module.exports = app;
