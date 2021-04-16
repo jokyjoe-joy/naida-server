@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const Log = require("../logging");
+const Log = require('../middleware/logger').Log;
 const pool = require("../db/db");
 const argon2 = require('argon2');
 const jwt = require('jsonwebtoken');
-const { authenticateJWT } = require('../middleware/auth');
 
 // Token secrets
 const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
@@ -12,15 +11,13 @@ const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET;
 let refreshTokens = [];
 
 // Argon2 config
-// Note: for production (depending on host), some of these numbers should be set higher.
-// However, for development this is good enough.
 const argon2_config = {
     type: argon2.argon2id,
-    memoryCost: 2**15,
-    timeCost: 4,
-    hashLength: 32,
-    saltLength: 16,
-    parallelism: 4,
+    memoryCost: parseInt(process.env.ARGON2_MEMORY_COST),
+    timeCost: parseInt(process.env.ARGON2_TIME_COST),
+    hashLength: parseInt(process.env.ARGON2_HASH_LENGTH),
+    saltLength: parseInt(process.env.ARGON2_SALT_LENGTH),
+    parallelism: parseInt(process.env.ARGON2_PARALLELISM),
 }
 
 function CheckIfPasswordIsWeak(password) {
@@ -58,8 +55,8 @@ router.post('/login', async (req, res) => {
             // Need to get user info here, because .rows[0] doesn't exist if there is no user found.
             user = user.rows[0];
             Log(`LOGIN: Successful login with the username of ${username}.`);   
-            const accessToken = jwt.sign({ username: user.username }, accessTokenSecret, { expiresIn: process.env.TOKEN_EXPIRATION_IN_MINUTES + 'm' });
-            const refreshToken = jwt.sign({ username: user.username }, refreshTokenSecret);
+            const accessToken = jwt.sign({ username: user.username, role: user.role }, accessTokenSecret, { expiresIn: process.env.TOKEN_EXPIRATION_IN_MINUTES + 'm' });
+            const refreshToken = jwt.sign({ username: user.username, role: user.role }, refreshTokenSecret);
 
             refreshTokens.push(refreshToken);
 
@@ -81,13 +78,19 @@ router.post('/register', async (req, res) => {
     try
     {
         const { first_name, middle_name, last_name } = req.body;
-        const { username, password } = req.body;
+        const { username, password, email } = req.body;
         const { place_of_birth, date_of_birth } = req.body;
 
         const userWithSameUsername = (await pool.query("SELECT * FROM users WHERE username = $1", [username])).rows[0];
         if (userWithSameUsername) {
             Log(`REGISTER: Failed registration, user already exists with the username of ${username}.`);
             return res.status(400).send({ message: "User with same username already exists." });
+        }
+
+        const userWithSameEmail = (await pool.query("SELECT * FROM users WHERE email = $1", [email])).rows[0];
+        if (userWithSameEmail) {
+            Log(`REGISTER: Failed registration, user already exists with the email address ${email}.`);
+            return res.status(400).send({ message: "User with same email address already exists." });
         }
 
         const isPasswordTooWeak = CheckIfPasswordIsWeak(password);
@@ -98,13 +101,12 @@ router.post('/register', async (req, res) => {
 
         const hashedPassword = await argon2.hash(password, argon2_config);
         const user = await pool.query(
-            `INSERT INTO users(first_name, middle_name, last_name, username, password, place_of_birth, date_of_birth)
-            VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [first_name, middle_name, last_name, username, hashedPassword, place_of_birth, date_of_birth]
+            `INSERT INTO users(first_name, middle_name, last_name, username, password, place_of_birth, date_of_birth, email)
+            VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [first_name, middle_name, last_name, username, hashedPassword, place_of_birth, date_of_birth, email]
         );
 
         Log(`REGISTER: Successful registration, new user registered with the username of ${username}.`);
-
         res.send(user.rows[0]);
     }
     catch (error)
@@ -127,11 +129,13 @@ router.post('/token', (req, res) => {
 
     jwt.verify(token, refreshTokenSecret, (err, user) => {
         if (err) {
+            Log(`TOKEN: Error while refreshing user ${user.username}'s token, ${err.message}.`);
             return res.sendStatus(403);
         }
 
-        const accessToken = jwt.sign({ username: user.username }, accessTokenSecret, { expiresIn: process.env.TOKEN_EXPIRATION_IN_MINUTES + 'm' });
+        Log(`TOKEN: User ${user.username} has successfully refreshed its token.`);
 
+        const accessToken = jwt.sign({ username: user.username, role: user.role }, accessTokenSecret, { expiresIn: process.env.TOKEN_EXPIRATION_IN_MINUTES + 'm' });
         res.json({ accessToken });
     });
 });

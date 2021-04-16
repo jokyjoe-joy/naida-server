@@ -10,13 +10,15 @@ const registeredUserData = {
     first_name: "Testname",
     last_name: "Testlastname",
     username: "testusername",
-    password: "MyAwesome12#"
+    password: "MyAwesome12#",
+    email: "testname@testy.com"
 }
 const receiverUserData = {
     first_name: "Golden",
     last_name: "Receiver",
     username: "goldenrec",
-    password: "MyWowTellMe19#"
+    password: "MyWowTellMe19#",
+    email: "goldenrec@goldy.com"
 }
 let registeredUserID;
 let registeredUserAccountID;
@@ -28,124 +30,143 @@ let adminAccessToken;
 process.env.NODE_ENV = 'test';
 
 describe('Authentication of new user', function() {
-    it("should not accept weak password and return 400", function(done) {
-        request(app)
-            .post('/register')
-            .send({
-                first_name: "Bad",
-                last_name: "Password",
-                username: "passwordsobad",
-                password: weakPassword
-            })
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(400);
-                done();
-            })
-    })
-
-    it("should return the data of the created user upon registering", function(done) {
-        request(app)
-            .post('/register')
-            .send(registeredUserData)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
-                expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
-                expect(res.body.username).to.be.equal(registeredUserData.username);
-                expect(res.body.password).to.not.be.equal(registeredUserData.password);
-                registeredUserID = res.body.id;
-                done();
-            })
-    })
-
-    it("should not be able to register with an already existing username", function(done) {
-        request(app)
-            .post('/register')
-            .send(registeredUserData)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(400);
-                done();
-            })  
-    })
-
-    it('should return an access-token and refresh-token when logging in', function(done) {
-       request(app)
-            .post('/login')
-            .send({
-                username: registeredUserData.username,
-                password: registeredUserData.password
-            })
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                expect(res.body.accessToken).to.exist;
-                accessToken = res.body.accessToken;
-                expect(res.body.refreshToken).to.exist;
-                refreshToken = res.body.refreshToken;
-                done();
-            }) 
-    })
-    it('should return the full data of the user using the access-token', function (done) {
-        request(app)
-            .get(`/users/${registeredUserID}`)
-            .set('Authorization', 'Bearer ' + accessToken)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
-                expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
-                expect(res.body.username).to.be.equal(registeredUserData.username);
-                done();                
-            })
-    })
-})
-
-describe('Accounts testing', function () {
-    it("should return the account data when creating it", function(done) {
-        request(app)
-            .post(`/accounts/`)
-            .set('Authorization', 'Bearer ' + accessToken)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                expect(res.body.id).to.exist;
-                registeredUserAccountID = res.body.id;
-                expect(parseInt(res.body.amount_of_money)).to.be.closeTo(0, 0.001);
-                done();
-            })
-    })
-
-    it("should created account be linked to the user who created it", function(done) {
-        request(app)
-            .get(`/users/${registeredUserID}`)
-            .set('Authorization', 'Bearer ' + accessToken)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
-                expect(res.body.username).to.be.equal(registeredUserData.username);
-                expect(res.body.account_id).to.be.equal(registeredUserAccountID);
-                done();
-            })
-    })
-    
-})
-
-if (adminUsername && adminPassword) {
-    describe('Transactions testing', function () {        
-        it("should be able to login as admin", function(done) {
+    describe('Registering', function () {
+        it("When registering, the user should receive correct user data.", function(done) {
             request(app)
-            .post('/login')
-            .send({
-                username: adminUsername,
-                password: adminPassword
-            })
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                expect(res.body.accessToken).to.exist;
-                adminAccessToken = res.body.accessToken;
-                expect(res.body.refreshToken).to.exist;
-                done();
-            })
+                .post('/register')
+                .send(registeredUserData)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
+                    expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
+                    expect(res.body.username).to.be.equal(registeredUserData.username);
+                    expect(res.body.password).to.not.be.equal(registeredUserData.password);
+                    expect(res.body.email).to.be.equal(registeredUserData.email);
+                    expect(res.body.role).to.be.equal('user');
+                    registeredUserID = res.body.id;
+                    done();
+                })
         })
+        it("When using a weak password it should throw an error (400).", function(done) {
+            request(app)
+                .post('/register')
+                .send({
+                    first_name: "Bad",
+                    last_name: "Password",
+                    username: "passwordsobad",
+                    password: weakPassword,
+                    email: "badpass@bady.com"
+                })
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(400);
+                    done();
+                })
+        })
+        it("When trying to register with an already existing username it should throw an error.", function(done) {
+            request(app)
+                .post('/register')
+                .send(registeredUserData)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(400);
+                    done();
+                })  
+        })
+    })
+    describe('Access-token', function () {
+        it('When logging in, user should get an access-token and a refresh-token.', function(done) {
+            request(app)
+                 .post('/login')
+                 .send({
+                     username: registeredUserData.username,
+                     password: registeredUserData.password
+                 })
+                 .end(function(err, res) {
+                     expect(res.statusCode).to.be.equal(200);
+                     expect(res.body.accessToken).to.exist;
+                     accessToken = res.body.accessToken;
+                     expect(res.body.refreshToken).to.exist;
+                     refreshToken = res.body.refreshToken;
+                     done();
+                 }) 
+         })
+         it('When a user is getting its data, it should get sensitive data as well with the access-token.', function (done) {
+             request(app)
+                 .get(`/users/`)
+                 .set('Authorization', 'Bearer ' + accessToken)
+                 .end(function(err, res) {
+                     expect(res.statusCode).to.be.equal(200);
+                     expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
+                     expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
+                     expect(res.body.username).to.be.equal(registeredUserData.username);
+                     expect(res.body.email).to.be.equal(registeredUserData.email);
+                     done();                
+                 })
+         })
+    })
+})
 
-        it("should sender (admin) see a successful transaction", function(done) {
+describe('Accounts', function () {
+    describe('Account creation', function () {
+        it("When creating an account, it should have no money on it.", function(done) {
+            request(app)
+                .post(`/accounts/`)
+                .set('Authorization', 'Bearer ' + accessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.id).to.exist;
+                    registeredUserAccountID = res.body.id;
+                    expect(parseInt(res.body.amount_of_money)).to.be.closeTo(0, 0.001);
+                    done();
+                })
+        })
+        it("After creating an account, the user should have the account linked to the user.", function(done) {
+            request(app)
+                .get(`/users/${registeredUserID}`)
+                .set('Authorization', 'Bearer ' + accessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
+                    expect(res.body.username).to.be.equal(registeredUserData.username);
+                    expect(res.body.account_id).to.be.equal(registeredUserAccountID);
+                    done();
+                })
+        })
+    })
+})
+
+describe('Administrator privileges', function () {
+    describe('Login as an admin', function () {
+        it("If an admin user account exists, it should get an access token upon login", function(done) {
+            request(app)
+                .post('/login')
+                .send({
+                    username: adminUsername,
+                    password: adminPassword
+                })
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.accessToken).to.exist;
+                    adminAccessToken = res.body.accessToken;
+                    expect(res.body.refreshToken).to.exist;
+                    done();
+                })
+        })
+        it("An admin user should have a role 'admin'.", function(done) {
+            request(app)
+                .get('/users/')
+                .set('Authorization', 'Bearer ' + adminAccessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.role).to.be.equal('admin');
+                    done();
+                })
+        })
+    })
+})
+
+describe('Transactions', function () {        
+    describe('Initiating transactions', function () {
+        it("When creating a new transaction of 2$, the user should see 2$ as amount_of_money.", function(done) {
             if (!adminAccessToken) this.skip();
             request(app)
                 .post('/transactions/')
@@ -162,8 +183,7 @@ if (adminUsername && adminPassword) {
                     done();
                 })
         })
-
-        it("should receiver (new user) have more money due to the previous transaction", function(done) {
+        it("When the receiver checks his account, it should have 2$.", function(done) {
             if (!adminAccessToken) this.skip();
             request(app)
                 .get(`/accounts/${registeredUserAccountID}`)
@@ -174,84 +194,85 @@ if (adminUsername && adminPassword) {
                     done();
                 })
         })
-    });
-}
+    })
+});
 
 describe('Logout and token refresh', function () {
-    it("should be able to logout, then have error when using the previous refresh token", function(done) {
-        request(app)
-            .post(`/logout`)
-            .send({ token: refreshToken })
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                
-                request(app)
+    describe("Logging out", function () {
+        it("After logging out, the refresh-token should be unusable, thus returning 403.", function(done) {
+            request(app)
+                .post(`/logout`)
+                .send({ token: refreshToken })
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    request(app)
+                    .post('/token')
+                    .send({ token: refreshToken })
+                    .end(function(err, res) {
+                        expect(res.statusCode).to.be.equal(403);
+                        expect(res.body.accessToken).to.not.exist;
+                        done();
+                    })
+                })
+        })
+        it('After logging out, user should be able to log in and get an access-token.', function(done) {
+            request(app)
+                 .post('/login')
+                 .send({
+                     username: registeredUserData.username,
+                     password: registeredUserData.password
+                 })
+                 .end(function(err, res) {
+                     expect(res.statusCode).to.be.equal(200);
+                     expect(res.body.accessToken).to.exist;
+                     accessToken = res.body.accessToken;
+                     expect(res.body.refreshToken).to.exist;
+                     refreshToken = res.body.refreshToken;
+                     done();
+                 }) 
+        })
+        it('When using refresh token, it should return a usable access-token.', function(done) {
+            request(app)
                 .post('/token')
                 .send({ token: refreshToken })
                 .end(function(err, res) {
-                    expect(res.statusCode).to.be.equal(403);
-                    expect(res.body.accessToken).to.not.exist;
-                    done();
-                })
-            })
-
-    })
-    it('should be able to log-in and get refresh token', function(done) {
-        request(app)
-             .post('/login')
-             .send({
-                 username: registeredUserData.username,
-                 password: registeredUserData.password
-             })
-             .end(function(err, res) {
-                 expect(res.statusCode).to.be.equal(200);
-                 expect(res.body.accessToken).to.exist;
-                 accessToken = res.body.accessToken;
-                 expect(res.body.refreshToken).to.exist;
-                 refreshToken = res.body.refreshToken;
-                 done();
-             }) 
-    })
-    it('should be able to refresh access-token and use it', function(done) {
-        request(app)
-            .post('/token')
-            .send({ token: refreshToken })
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                expect(res.body.accessToken).to.exist;
-                accessToken = res.body.accessToken;
-                
-                request(app)
-                .get(`/users/${registeredUserID}`)
-                .set('Authorization', 'Bearer ' + accessToken)
-                .end(function(err, res) {
                     expect(res.statusCode).to.be.equal(200);
-                    expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
-                    expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
-                    expect(res.body.username).to.be.equal(registeredUserData.username);
-                    done();
+                    expect(res.body.accessToken).to.exist;
+                    accessToken = res.body.accessToken;
+                    request(app)
+                        .get(`/users/${registeredUserID}`)
+                        .set('Authorization', 'Bearer ' + accessToken)
+                        .end(function(err, res) {
+                            expect(res.statusCode).to.be.equal(200);
+                            expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
+                            expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
+                            expect(res.body.username).to.be.equal(registeredUserData.username);
+                            done();
+                        })
                 })
-            })
+        })
     })
 })
 
-describe("Deleting users and accounts", function() {
-    it("should delete test account", function(done) {
-        request(app)
-            .delete(`/accounts/${registeredUserAccountID}`)
-            .set('Authorization', 'Bearer ' + accessToken)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                done();
-            })
-    })
-    it("should delete test user", function(done) {
-        request(app)
-            .delete(`/users/${registeredUserID}`)
-            .set('Authorization', 'Bearer ' + accessToken)
-            .end(function(err, res) {
-                expect(res.statusCode).to.be.equal(200);
-                done();
-            })
+describe("Deleting data", function() {
+    describe("User and account by user", function() {
+        it("A user should be able to delete its own account.", function(done) {
+            request(app)
+                .delete(`/accounts/${registeredUserAccountID}`)
+                .set('Authorization', 'Bearer ' + accessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    done();
+                })
+        })
+        it("A user should be able to delete itself.", function(done) {
+            request(app)
+                .delete(`/users/${registeredUserID}`)
+                .set('Authorization', 'Bearer ' + accessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    done();
+                })
+        })
     })
 })

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require("../db/db");
-const Log = require("../logging");
+const Log = require('../middleware/logger').Log;
 const authenticateJWT = require('../middleware/auth').authenticateJWT;
 
 router.get('/', authenticateJWT, async (req, res) => {

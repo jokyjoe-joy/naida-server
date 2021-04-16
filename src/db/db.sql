@@ -10,6 +10,8 @@ CREATE TABLE users(
 	last_name TEXT NOT NULL,
 	username TEXT NOT NULL,
 	password TEXT NOT NULL,
+	email TEXT NOT NULL,
+	role TEXT DEFAULT 'user',
 	place_of_birth CHAR(50), -- NOT NULL?
 	date_of_birth DATE, -- NOT NULL?
 	account_id INT,

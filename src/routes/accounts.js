@@ -1,13 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const pool = require("../db/db");
-const Log = require("../logging");
+const Log = require('../middleware/logger').Log;
 const authenticateJWT = require('../middleware/auth').authenticateJWT;
+
+async function getAccountData(account_id, authenticatedUserData) {
+    const requestedAccountData = (await pool.query("SELECT * FROM accounts WHERE id = $1", [account_id])).rows[0];
+
+    if (account_id == authenticatedUserData.account_id) {
+        return (requestedAccountData);
+    } else {
+        return false;
+    }
+}
 
 router.get('/', authenticateJWT, async (req, res) => {
     try {
-        return res.send("Welcome to accounts!");
+        const requestedAccountData = await getAccountData(req.params.id, authenticatedUserData)
 
+        if (requestedAccountData)
+            return res.send(requestedAccountData);
+        else
+            return res.sendStatus(403);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -16,16 +30,14 @@ router.get('/', authenticateJWT, async (req, res) => {
 router.get('/:id', authenticateJWT, async (req, res) => {
     try {
         const authenticatedUserData = (await pool.query("SELECT * FROM users WHERE username = $1", [req.user.username])).rows[0];
-        const authenticatedUserAccountID = authenticatedUserData.account_id;
-        const requestedAccountData = (await pool.query("SELECT * FROM accounts WHERE id = $1", [req.params.id])).rows[0];
+        const requestedAccountData = await getAccountData(req.params.id, authenticatedUserData)
 
-        if (req.params.id == authenticatedUserAccountID) {
+        if (requestedAccountData)
             return res.send(requestedAccountData);
-        } else {
+        else
             return res.sendStatus(403);
-        }
     } catch (error) {
-        console.log(error.message);
+        Log(`ACCOUNTS: Internal server error (${error.message})`);
         res.status(500).json({ message: error.message });
     }
 })

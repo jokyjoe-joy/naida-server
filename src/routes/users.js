@@ -2,13 +2,40 @@ const express = require('express');
 const router = express.Router();
 const pool = require("../db/db");
 const authenticateJWT = require('../middleware/auth').authenticateJWT;
-const Log = require('../logging');
+const Log = require('../middleware/logger').Log;
+
+async function returnUserData(userID, authenticatedUserData) {
+    try {
+        const requestedUserData = (await pool.query("SELECT * from users WHERE id = $1", [userID])).rows[0];
+        // If the authenticated user is the same as the requested user, return all data.
+        // Otherwise return only a limited amount, so that sensitive data is protected.
+        if (userID == authenticatedUserData.id) {
+            Log(`USERS: User ${authenticatedUserData.username} requested its own data.`);
+            return (requestedUserData);
+        } else {
+            Log(`USERS: User ${authenticatedUserData.username} requested ${requestedUserData.username}'s data.`);
+            return ({
+                "id": requestedUserData.id,
+                "first_name": requestedUserData.first_name,
+                "middle_name": requestedUserData.middle_name,
+                "last_name": requestedUserData.last_name
+            });
+        }
+    } catch (error) {
+        Log(`USERS: Internal server error (${error.message})`);
+        res.status(500).json({ message: error.message });
+    }
+}
 
 router.get('/', authenticateJWT, async (req, res) => {
     try {
-        return res.send("Welcome to users!");
+        const authenticatedUserData = (await pool.query("SELECT * from users WHERE username = $1", [req.user.username])).rows[0];
+        const authenticatedUserID = authenticatedUserData.id;
+        const requestedData = await returnUserData(authenticatedUserID, authenticatedUserData);
+        res.send(requestedData);
 
     } catch (error) {
+        Log(`USERS: Internal server error (${error.message})`);
         res.status(500).json({ message: error.message });
     }
 });
@@ -16,23 +43,8 @@ router.get('/', authenticateJWT, async (req, res) => {
 router.get('/:id', authenticateJWT, async (req, res) => {
     try {
         const authenticatedUserData = (await pool.query("SELECT * from users WHERE username = $1", [req.user.username])).rows[0];
-        const authenticatedUserID = authenticatedUserData.id;
-
-        const requestedUserData = (await pool.query("SELECT * from users WHERE id = $1", [req.params.id])).rows[0];
-        // If the authenticated user is the same as the requested user, return all data.
-        // Otherwise return only a limited amount, so that sensitive data is protected.
-        if (req.params.id == authenticatedUserID) {
-            Log(`USERS: User ${authenticatedUserData.username} requested its own data.`);
-            return res.send(requestedUserData);
-        } else {
-            Log(`USERS: User ${authenticatedUserData.username} requested ${requestedUserData.username}'s data.`);
-            return res.send({
-                "id": requestedUserData.id,
-                "first_name": requestedUserData.first_name,
-                "middle_name": requestedUserData.middle_name,
-                "last_name": requestedUserData.last_name
-            });
-        }
+        const requestedData = await returnUserData(req.params.id, authenticatedUserData);
+        res.send(requestedData);
     } catch (error) {
         Log(`USERS: Internal server error (${error.message})`);
         res.status(500).json({ message: error.message });
