@@ -32,14 +32,8 @@ CREATE TABLE transactions(
 	status TEXT DEFAULT 'PENDING'
 );
 
-
--- EXAMPLES
-
--- Example accounts
-INSERT INTO accounts(amount_of_money) VALUES(300);
-INSERT INTO accounts(amount_of_money) VALUES(1200);
-INSERT INTO accounts(amount_of_money) VALUES(10);
-
--- Example users
-INSERT INTO users(first_name, last_name, account_id, username, password) VALUES('Jack', 'Smith', 1, 'jacksmith', 'mybadpass');
-INSERT INTO users(first_name, middle_name, last_name, account_id, username, password) VALUES('John', 'Caribbean', 'Doe', 2, 'johndoe', 'mygoodpass');
+CREATE TABLE logs(
+	id SERIAL PRIMARY KEY NOT NULL,
+	date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+	message TEXT NOT NULL
+);
