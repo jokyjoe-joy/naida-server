@@ -1,19 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const pool = require("../db/db");
-const authenticateJWT = require('../middleware/auth').authenticateJWT;
+const { isAdmin, authenticateJWT } = require('../middleware/auth');
 const Log = require('../middleware/logger').Log;
 
 async function returnUserData(userID, authenticatedUserData) {
     try {
         const requestedUserData = (await pool.query("SELECT * from users WHERE id = $1", [userID])).rows[0];
+        // The user should not get the hash of his password, it is even useless for a usual user.
+        delete requestedUserData['password'];
         // If the authenticated user is the same as the requested user, return all data.
         // Otherwise return only a limited amount, so that sensitive data is protected.
         if (userID == authenticatedUserData.id) {
-            Log(`USERS: User ${authenticatedUserData.username} requested its own data.`);
+            Log(`USERS: User ${authenticatedUserData.username} requested its own data.`, 'log');
             return (requestedUserData);
         } else {
-            Log(`USERS: User ${authenticatedUserData.username} requested ${requestedUserData.username}'s data.`);
+            Log(`USERS: User ${authenticatedUserData.username} requested ${requestedUserData.username}'s data.`, 'log');
             return ({
                 "id": requestedUserData.id,
                 "first_name": requestedUserData.first_name,
@@ -22,20 +24,34 @@ async function returnUserData(userID, authenticatedUserData) {
             });
         }
     } catch (error) {
-        Log(`USERS: Internal server error (${error.message})`);
+        Log(`USERS: Internal server error (${error.message})`, 'error');
         res.status(500).json({ message: error.message });
     }
 }
 
-router.get('/', authenticateJWT, async (req, res) => {
+router.get('/', authenticateJWT, isAdmin, async (req, res) => {
     try {
-        const authenticatedUserData = (await pool.query("SELECT * from users WHERE username = $1", [req.user.username])).rows[0];
+        const requestedData = (await pool.query("SELECT * FROM users ORDER BY id DESC")).rows;
+        // An admin should not have access to the users' password.
+        for (row in requestedData) {
+            delete requestedData[row]['password'];
+        }
+        return res.send(requestedData);
+    } catch (error) {
+        Log(`USERS: Internal server error (${error.message})`, 'error');
+        res.status(500).json({ message: error.message });
+    }
+})
+
+router.get('/me', authenticateJWT, async (req, res) => {
+    try {
+        const authenticatedUserData = (await pool.query("SELECT * FROM users WHERE username = $1", [req.user.username])).rows[0];
         const authenticatedUserID = authenticatedUserData.id;
         const requestedData = await returnUserData(authenticatedUserID, authenticatedUserData);
         res.send(requestedData);
 
     } catch (error) {
-        Log(`USERS: Internal server error (${error.message})`);
+        Log(`USERS: Internal server error (${error.message})`, 'error');
         res.status(500).json({ message: error.message });
     }
 });
@@ -46,7 +62,7 @@ router.get('/:id', authenticateJWT, async (req, res) => {
         const requestedData = await returnUserData(req.params.id, authenticatedUserData);
         res.send(requestedData);
     } catch (error) {
-        Log(`USERS: Internal server error (${error.message})`);
+        Log(`USERS: Internal server error (${error.message})`, 'error');
         res.status(500).json({ message: error.message });
     }
 })
@@ -63,7 +79,7 @@ router.post('/:id/account', authenticateJWT, async (req, res) => {
 
         if (req.params.id == authenticatedUserID) {
             if (authenticatedUserData.account_id == req.body.account_id) {
-                Log(`USERS: Unsuccessful account_id change by ${authenticatedUserData.username}, can't set account_id to the current account_id.`);
+                Log(`USERS: Unsuccessful account_id change by ${authenticatedUserData.username}, can't set account_id to the current account_id.`, 'warning');
                 return res.status(400).send({ "message": "Can't set account_id to the current account_id." });
             }
             
@@ -76,17 +92,17 @@ router.post('/:id/account', authenticateJWT, async (req, res) => {
                     [req.body.account_id, authenticatedUserID])
                 ).rows[0];
                 
-                Log(`USERS: Account_id changed to ${req.body.account_id} from ${authenticatedUserData.account_id} by ${authenticatedUserData.username}.`);
+                Log(`USERS: Account_id changed to ${req.body.account_id} from ${authenticatedUserData.account_id} by ${authenticatedUserData.username}.`, 'log');
                 return res.send({ "account_id": updatedUserData.account_id });
             } else {
-                Log(`USERS: Unsuccessful account_id change to ${req.body.account_id} by ${authenticatedUserData.username}, account either doesn't exist or is linked to another user.`);
+                Log(`USERS: Unsuccessful account_id change to ${req.body.account_id} by ${authenticatedUserData.username}, account either doesn't exist or is linked to another user.`, 'warning');
                 return res.status(403).send({ "message": "Account either doesn't exist or is linked to another user." });
             }
         } else {
             return res.sendStatus(403);
         }
     } catch (error) {
-        Log(`USERS: Internal server error (${error.message})`);
+        Log(`USERS: Internal server error (${error.message})`, 'error');
         res.status(500).json({ message: error.message });
     }
 })
@@ -98,14 +114,14 @@ router.delete('/:id', authenticateJWT, async (req, res) => {
 
         if (req.params.id == authenticatedUserID) {
             await pool.query("DELETE FROM users WHERE id = $1", [req.params.id]);
-            Log(`USERS: User ${authenticatedUserData.username} successfully deleted its own user.`);
+            Log(`USERS: User ${authenticatedUserData.username} successfully deleted its own user.`, 'log');
             return res.sendStatus(200);
         } else {
-            Log(`USERS: Unsuccessful user deletion of user with id of ${req.params.id} by user ${authenticatedUserData.username}, not authorized.`);
+            Log(`USERS: Unsuccessful user deletion of user with id of ${req.params.id} by user ${authenticatedUserData.username}, not authorized.`, 'warning');
             return res.sendStatus(403);
         }
     } catch (error) {
-        Log(`USERS: Internal server error (${error.message})`);
+        Log(`USERS: Internal server error (${error.message})`, 'error');
         res.status(500).json({ message: error.message });
     }
 })

@@ -3,9 +3,11 @@ const chai = require('chai');
 const request = require('supertest');
 const expect = chai.expect;
 
+// To prevent console.log() in logging.js.
+process.env.NODE_ENV = 'test';
+
 const adminUsername = "admin";
 const adminPassword = "HardPass#12";
-const weakPassword = "thisisaweakpass";
 const registeredUserData = {
     first_name: "Testname",
     last_name: "Testlastname",
@@ -25,9 +27,6 @@ let registeredUserAccountID;
 let accessToken;
 let refreshToken;
 let adminAccessToken;
-
-// To prevent console.log() in logging.js.
-process.env.NODE_ENV = 'test';
 
 describe('Authentication of new user', function() {
     describe('Registering', function () {
@@ -54,7 +53,7 @@ describe('Authentication of new user', function() {
                     first_name: "Bad",
                     last_name: "Password",
                     username: "passwordsobad",
-                    password: weakPassword,
+                    password: "thisisaweakpass",
                     email: "badpass@bady.com"
                 })
                 .end(function(err, res) {
@@ -89,9 +88,9 @@ describe('Authentication of new user', function() {
                      done();
                  }) 
          })
-         it('When a user is getting its data, it should get sensitive data as well with the access-token.', function (done) {
+         it('When a user is getting its data, it should get his sensitive data (but not password) with the access-token.', function (done) {
              request(app)
-                 .get(`/users/`)
+                 .get(`/users/me`)
                  .set('Authorization', 'Bearer ' + accessToken)
                  .end(function(err, res) {
                      expect(res.statusCode).to.be.equal(200);
@@ -99,6 +98,7 @@ describe('Authentication of new user', function() {
                      expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
                      expect(res.body.username).to.be.equal(registeredUserData.username);
                      expect(res.body.email).to.be.equal(registeredUserData.email);
+                     expect(res.body.password).to.not.exist;
                      done();                
                  })
          })
@@ -131,12 +131,21 @@ describe('Accounts', function () {
                     done();
                 })
         })
+        it("When creating an account while already having one, a user should receive an error", function(done) {
+            request(app)
+                .post('/accounts')
+                .set('Authorization', 'Bearer ' + accessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(400);
+                    done();
+                })
+        })
     })
 })
 
 describe('Administrator privileges', function () {
     describe('Login as an admin', function () {
-        it("If an admin user account exists, it should get an access token upon login", function(done) {
+        it("If an admin user account exists, it should get an access token and a refresh token upon login", function(done) {
             request(app)
                 .post('/login')
                 .send({
@@ -151,15 +160,76 @@ describe('Administrator privileges', function () {
                     done();
                 })
         })
-        it("An admin user should have a role 'admin'.", function(done) {
+        it("An admin user should have a role 'admin'", function(done) {
             request(app)
-                .get('/users/')
+                .get('/users/me')
                 .set('Authorization', 'Bearer ' + adminAccessToken)
                 .end(function(err, res) {
                     expect(res.statusCode).to.be.equal(200);
                     expect(res.body.role).to.be.equal('admin');
                     done();
                 })
+        })
+    })
+    describe("Getting sensitive information", function() {
+        it("An admin should be able to get the data (e.g. email, but not the password) of the owner of an account", function(done) {
+            request(app)
+                .get(`/accounts/${registeredUserAccountID}/owner`)
+                .set('Authorization', 'Bearer ' + adminAccessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.username).to.be.equal(registeredUserData.username);
+                    expect(res.body.first_name).to.be.equal(registeredUserData.first_name);
+                    expect(res.body.last_name).to.be.equal(registeredUserData.last_name);
+                    expect(res.body.password).to.not.exist;
+                    expect(res.body.email).to.be.equal(registeredUserData.email);
+                    done();
+                })
+        })
+    })
+    describe("Creating an account while already having an account", function () {
+        it("When creating an account while already having one, an admin should be able to create one", function(done) {
+            request(app)
+                .post('/accounts')
+                .set('Authorization', 'Bearer ' + adminAccessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body.id).to.exist;
+                    expect(parseInt(res.body.amount_of_money)).to.be.closeTo(0, 0.00001);
+                    done();
+                })
+        })
+    })
+    describe("Getting all data", function() {
+        it("When getting all users, admin should see all users without their passwords", function(done) {
+            request(app)
+                .get('/users')
+                .set('Authorization', 'Bearer ' + adminAccessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body[0].password).to.not.exist;
+                    done();
+                });
+        })
+        it("When getting all accounts, admin should see the money on the account", function(done) {
+            request(app)
+                .get('/accounts')
+                .set('Authorization', 'Bearer ' + adminAccessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body[0].amount_of_money).to.exist;
+                    done();
+                });
+        })
+        it("When getting all transactions, admin should see the amount of money transferred", function(done) {
+            request(app)
+                .get('/transactions')
+                .set('Authorization', 'Bearer ' + adminAccessToken)
+                .end(function(err, res) {
+                    expect(res.statusCode).to.be.equal(200);
+                    expect(res.body[0].amount_of_money).to.exist;
+                    done();
+                });
         })
     })
 })
@@ -175,7 +245,8 @@ describe('Transactions', function () {
                     receiver_account_id: registeredUserAccountID,
                     amount_of_money: 2.000000,
                     receiver_first_name: registeredUserData.first_name,
-                    receiver_last_name: registeredUserData.last_name
+                    receiver_last_name: registeredUserData.last_name,
+                    message: "Hey, I am sending a few bucks for you!"
                 })
                 .end(function(err, res) {
                     expect(res.statusCode).to.be.equal(200);

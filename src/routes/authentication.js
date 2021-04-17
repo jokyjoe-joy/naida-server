@@ -54,7 +54,7 @@ router.post('/login', async (req, res) => {
         if (user.rows[0] && await argon2.verify(user.rows[0].password, password)) {
             // Need to get user info here, because .rows[0] doesn't exist if there is no user found.
             user = user.rows[0];
-            Log(`LOGIN: Successful login with the username of ${username}.`);   
+            Log(`LOGIN: Successful login with the username of ${username}.`, 'log');   
             const accessToken = jwt.sign({ username: user.username, role: user.role }, accessTokenSecret, { expiresIn: process.env.TOKEN_EXPIRATION_IN_MINUTES + 'm' });
             const refreshToken = jwt.sign({ username: user.username, role: user.role }, refreshTokenSecret);
 
@@ -62,13 +62,13 @@ router.post('/login', async (req, res) => {
 
             res.json({ accessToken, refreshToken });
         } else {
-            Log(`LOGIN: Failed login with the username of ${username}.`);
+            Log(`LOGIN: Failed login with the username of ${username}.`, 'warning');
             res.send('Username or password incorrect');
         }
     }
     catch (error)
     {
-        Log(`LOGIN: Internal server error (${error.message})`);
+        Log(`LOGIN: Internal server error (${error.message})`, 'error');
         res.status(500).json({ message: error.message });
     }
    
@@ -83,19 +83,19 @@ router.post('/register', async (req, res) => {
 
         const userWithSameUsername = (await pool.query("SELECT * FROM users WHERE username = $1", [username])).rows[0];
         if (userWithSameUsername) {
-            Log(`REGISTER: Failed registration, user already exists with the username of ${username}.`);
+            Log(`REGISTER: Failed registration, user already exists with the username of ${username}.`, 'warning');
             return res.status(400).send({ message: "User with same username already exists." });
         }
 
         const userWithSameEmail = (await pool.query("SELECT * FROM users WHERE email = $1", [email])).rows[0];
         if (userWithSameEmail) {
-            Log(`REGISTER: Failed registration, user already exists with the email address ${email}.`);
+            Log(`REGISTER: Failed registration, user already exists with the email address ${email}.`, 'warning');
             return res.status(400).send({ message: "User with same email address already exists." });
         }
 
         const isPasswordTooWeak = CheckIfPasswordIsWeak(password);
         if (isPasswordTooWeak) {
-            Log(`REGISTER: Failed registration, ${username}'s given password doesn't meet the complexity requirements.`);
+            Log(`REGISTER: Failed registration, ${username}'s given password doesn't meet the complexity requirements.`, 'warning');
             return res.status(400).send({ message: "The given password doesn't meet complexity requirements." });
         }
 
@@ -106,12 +106,12 @@ router.post('/register', async (req, res) => {
             [first_name, middle_name, last_name, username, hashedPassword, place_of_birth, date_of_birth, email]
         );
 
-        Log(`REGISTER: Successful registration, new user registered with the username of ${username}.`);
+        Log(`REGISTER: Successful registration, new user registered with the username of ${username}.`, 'log');
         res.send(user.rows[0]);
     }
     catch (error)
     {
-        Log(`REGISTER: Internal server error (${error.message})`);
+        Log(`REGISTER: Internal server error (${error.message})`, 'error');
         res.status(500).json({ message: error.message });
     }
 })
@@ -129,11 +129,11 @@ router.post('/token', (req, res) => {
 
     jwt.verify(token, refreshTokenSecret, (err, user) => {
         if (err) {
-            Log(`TOKEN: Error while refreshing user ${user.username}'s token, ${err.message}.`);
+            Log(`TOKEN: Error while refreshing user ${user.username}'s token, ${err.message}.`, 'error');
             return res.sendStatus(403);
         }
 
-        Log(`TOKEN: User ${user.username} has successfully refreshed its token.`);
+        Log(`TOKEN: User ${user.username} has successfully refreshed its token.`, 'log');
 
         const accessToken = jwt.sign({ username: user.username, role: user.role }, accessTokenSecret, { expiresIn: process.env.TOKEN_EXPIRATION_IN_MINUTES + 'm' });
         res.json({ accessToken });
